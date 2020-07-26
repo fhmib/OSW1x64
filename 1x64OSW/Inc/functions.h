@@ -1,0 +1,59 @@
+#ifndef __functions_H
+#define __functions_H
+
+#include "main.h"
+
+typedef struct {
+  uint8_t type;
+  void *pbuf;
+  uint32_t length;
+} MsgStruct;
+
+typedef enum {
+  MSG_TYPE_LOG,
+  MSG_TYPE_FLASH_ISR,
+} MsgType;
+
+// For Log File
+typedef struct {
+  uint32_t header;
+  uint32_t offset;
+  uint8_t cur_sector;
+} LogFileState;
+
+typedef enum {
+  EE_UP_MAIGC             = 0x00, // 0x0 ~ 0x0
+  EE_UP_RUN               = 0x01, // 0x1 ~ 0x1 Which fw is running
+  EE_UP_FLASH_EMPTY       = 0x02, // 0x2 ~ 0x2 If flash is empty
+  EE_UP_LENGTH            = 0x03, // 0x3 ~ 0x6
+  EE_UP_CRC32             = 0x07, // 0x7 ~ 0xA
+  EE_UP_FACTORY_LENGTH    = 0x0B, // 0xB ~ 0xE
+  EE_UP_FACTORY_CRC32     = 0x0F, // 0xF ~ 0x12
+
+  EE_LOG_OFFSET           = 0x13, // 0x13 ~ 0x16
+  EE_LOG_HEADER           = 0x17, // 0x17 ~ 0x1A
+} EepromAddrMap;
+
+void Throw_Log(uint8_t *buf, uint32_t length);
+uint32_t Log_Write(uint32_t addr, uint8_t *pbuf, uint32_t length);
+uint32_t Log_Write_byte(uint32_t addr, uint8_t ch, uint32_t length);
+uint32_t Log_Read(uint32_t addr, uint8_t *pbuf, uint32_t length);
+
+
+typedef struct {
+  uint8_t magic;
+  uint8_t run;
+  uint8_t flash_empty;
+  uint32_t length;
+  uint32_t crc32;
+  uint32_t factory_length;
+  uint32_t factory_crc32;
+} UpgradeFlashState;
+
+osStatus_t Get_Up_Status(UpgradeFlashState *status);
+osStatus_t Update_Up_Status(UpgradeFlashState *status);
+osStatus_t Get_Log_Status(LogFileState *log_status);
+osStatus_t Update_Log_Status(LogFileState *log_status);
+
+
+#endif
