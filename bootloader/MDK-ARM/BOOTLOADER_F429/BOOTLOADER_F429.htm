@@ -3,9 +3,9 @@
 <title>Static Call Graph - [BOOTLOADER_F429\BOOTLOADER_F429.axf]</title></head>
 <body><HR>
 <H1>Static Call Graph for image BOOTLOADER_F429\BOOTLOADER_F429.axf</H1><HR>
-<BR><P>#&#060CALLGRAPH&#062# ARM Linker, 5060750: Last Updated: Sun Jul 26 18:39:34 2020
+<BR><P>#&#060CALLGRAPH&#062# ARM Linker, 5060750: Last Updated: Wed Jul 29 15:57:29 2020
 <BR><P>
-<H3>Maximum Stack Usage =        624 bytes + Unknown(Cycles, Untraceable Function Pointers)</H3><H3>
+<H3>Maximum Stack Usage =        632 bytes + Unknown(Cycles, Untraceable Function Pointers)</H3><H3>
 Call chain for Maximum Stack Depth:</H3>
 main &rArr; Main_Menu &rArr; startup_process &rArr; update_config_data &rArr; Update_Up_Status &rArr; I2cEepromWrite &rArr; HAL_I2C_Mem_Write &rArr; I2C_RequestMemoryWrite &rArr; I2C_WaitOnMasterAddressFlagUntilTimeout
 <P>
@@ -434,8 +434,8 @@ Global Symbols
 <LI><a href="#[6c]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;__aeabi_llsl
 </UL>
 <BR>[Called By]<UL><LI><a href="#[a3]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;HAL_RCC_GetSysClockFreq
-<LI><a href="#[df]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;_printf_core
 <LI><a href="#[b9]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;UART_SetConfig
+<LI><a href="#[df]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;_printf_core
 </UL>
 
 <P><STRONG><a name="[e1]"></a>__aeabi_memcpy</STRONG> (Thumb, 36 bytes, Stack size 0 bytes, memcpya.o(.text))
@@ -921,12 +921,12 @@ Global Symbols
 <BR><BR>[Stack]<UL><LI>Max Depth = 16<LI>Call Chain = HAL_TIM_IRQHandler
 </UL>
 <BR>[Calls]<UL><LI><a href="#[b2]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;HAL_TIM_PeriodElapsedCallback
+<LI><a href="#[b4]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;HAL_TIM_TriggerCallback
 <LI><a href="#[b1]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;HAL_TIM_PWM_PulseFinishedCallback
 <LI><a href="#[b0]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;HAL_TIM_OC_DelayElapsedCallback
 <LI><a href="#[af]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;HAL_TIM_IC_CaptureCallback
 <LI><a href="#[b5]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;HAL_TIMEx_CommutCallback
 <LI><a href="#[b3]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;HAL_TIMEx_BreakCallback
-<LI><a href="#[b4]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;HAL_TIM_TriggerCallback
 </UL>
 <BR>[Called By]<UL><LI><a href="#[27]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;TIM3_IRQHandler
 </UL>
@@ -1073,7 +1073,7 @@ Global Symbols
 </UL>
 
 <P><STRONG><a name="[cb]"></a>Main_Menu</STRONG> (Thumb, 1436 bytes, Stack size 64 bytes, menu.o(i.Main_Menu))
-<BR><BR>[Stack]<UL><LI>Max Depth = 624<LI>Call Chain = Main_Menu &rArr; startup_process &rArr; update_config_data &rArr; Update_Up_Status &rArr; I2cEepromWrite &rArr; HAL_I2C_Mem_Write &rArr; I2C_RequestMemoryWrite &rArr; I2C_WaitOnMasterAddressFlagUntilTimeout
+<BR><BR>[Stack]<UL><LI>Max Depth = 632<LI>Call Chain = Main_Menu &rArr; startup_process &rArr; update_config_data &rArr; Update_Up_Status &rArr; I2cEepromWrite &rArr; HAL_I2C_Mem_Write &rArr; I2C_RequestMemoryWrite &rArr; I2C_WaitOnMasterAddressFlagUntilTimeout
 </UL>
 <BR>[Calls]<UL><LI><a href="#[ce]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;startup_process
 <LI><a href="#[d0]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;print_up_status
@@ -1256,19 +1256,19 @@ Global Symbols
 <BR><BR>[Called By]<UL><LI><a href="#[c0]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;JumpToAddr
 </UL>
 
-<P><STRONG><a name="[cf]"></a>erase_up_status</STRONG> (Thumb, 48 bytes, Stack size 280 bytes, upgrade.o(i.erase_up_status))
-<BR><BR>[Stack]<UL><LI>Max Depth = 456<LI>Call Chain = erase_up_status &rArr; I2cEepromWrite &rArr; HAL_I2C_Mem_Write &rArr; I2C_RequestMemoryWrite &rArr; I2C_WaitOnMasterAddressFlagUntilTimeout
+<P><STRONG><a name="[cf]"></a>erase_up_status</STRONG> (Thumb, 68 bytes, Stack size 304 bytes, upgrade.o(i.erase_up_status))
+<BR><BR>[Stack]<UL><LI>Max Depth = 480<LI>Call Chain = erase_up_status &rArr; I2cEepromWrite &rArr; HAL_I2C_Mem_Write &rArr; I2C_RequestMemoryWrite &rArr; I2C_WaitOnMasterAddressFlagUntilTimeout
 </UL>
 <BR>[Calls]<UL><LI><a href="#[cc]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Serial_PutString
 <LI><a href="#[bf]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;I2cEepromWrite
-<LI><a href="#[d1]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;__2sprintf
 <LI><a href="#[6e]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;__aeabi_memset
+<LI><a href="#[d1]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;__2sprintf
 </UL>
 <BR>[Called By]<UL><LI><a href="#[cb]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Main_Menu
 </UL>
 
 <P><STRONG><a name="[64]"></a>main</STRONG> (Thumb, 94 bytes, Stack size 0 bytes, main.o(i.main))
-<BR><BR>[Stack]<UL><LI>Max Depth = 624<LI>Call Chain = main &rArr; Main_Menu &rArr; startup_process &rArr; update_config_data &rArr; Update_Up_Status &rArr; I2cEepromWrite &rArr; HAL_I2C_Mem_Write &rArr; I2C_RequestMemoryWrite &rArr; I2C_WaitOnMasterAddressFlagUntilTimeout
+<BR><BR>[Stack]<UL><LI>Max Depth = 632<LI>Call Chain = main &rArr; Main_Menu &rArr; startup_process &rArr; update_config_data &rArr; Update_Up_Status &rArr; I2cEepromWrite &rArr; HAL_I2C_Mem_Write &rArr; I2C_RequestMemoryWrite &rArr; I2C_WaitOnMasterAddressFlagUntilTimeout
 </UL>
 <BR>[Calls]<UL><LI><a href="#[ca]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;MX_USART3_UART_Init
 <LI><a href="#[c8]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;MX_TIM3_Init
@@ -1287,8 +1287,8 @@ Global Symbols
 </UL>
 <BR>[Address Reference Count : 1]<UL><LI> entry9a.o(.ARM.Collect$$$$0000000B)
 </UL>
-<P><STRONG><a name="[d0]"></a>print_up_status</STRONG> (Thumb, 58 bytes, Stack size 304 bytes, upgrade.o(i.print_up_status))
-<BR><BR>[Stack]<UL><LI>Max Depth = 504<LI>Call Chain = print_up_status &rArr; Get_Up_Status &rArr; I2cEepromRead &rArr; HAL_I2C_Mem_Read &rArr; I2C_RequestMemoryRead &rArr; I2C_WaitOnMasterAddressFlagUntilTimeout
+<P><STRONG><a name="[d0]"></a>print_up_status</STRONG> (Thumb, 88 bytes, Stack size 312 bytes, upgrade.o(i.print_up_status))
+<BR><BR>[Stack]<UL><LI>Max Depth = 512<LI>Call Chain = print_up_status &rArr; Get_Up_Status &rArr; I2cEepromRead &rArr; HAL_I2C_Mem_Read &rArr; I2C_RequestMemoryRead &rArr; I2C_WaitOnMasterAddressFlagUntilTimeout
 </UL>
 <BR>[Calls]<UL><LI><a href="#[82]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Get_Up_Status
 <LI><a href="#[cc]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Serial_PutString
@@ -1297,8 +1297,8 @@ Global Symbols
 <BR>[Called By]<UL><LI><a href="#[cb]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Main_Menu
 </UL>
 
-<P><STRONG><a name="[ce]"></a>startup_process</STRONG> (Thumb, 236 bytes, Stack size 304 bytes, upgrade.o(i.startup_process))
-<BR><BR>[Stack]<UL><LI>Max Depth = 560<LI>Call Chain = startup_process &rArr; update_config_data &rArr; Update_Up_Status &rArr; I2cEepromWrite &rArr; HAL_I2C_Mem_Write &rArr; I2C_RequestMemoryWrite &rArr; I2C_WaitOnMasterAddressFlagUntilTimeout
+<P><STRONG><a name="[ce]"></a>startup_process</STRONG> (Thumb, 288 bytes, Stack size 312 bytes, upgrade.o(i.startup_process))
+<BR><BR>[Stack]<UL><LI>Max Depth = 568<LI>Call Chain = startup_process &rArr; update_config_data &rArr; Update_Up_Status &rArr; I2cEepromWrite &rArr; HAL_I2C_Mem_Write &rArr; I2C_RequestMemoryWrite &rArr; I2C_WaitOnMasterAddressFlagUntilTimeout
 </UL>
 <BR>[Calls]<UL><LI><a href="#[e0]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;boot_process
 <LI><a href="#[82]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Get_Up_Status
@@ -1310,7 +1310,7 @@ Global Symbols
 <LI><a href="#[cb]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Main_Menu
 </UL>
 
-<P><STRONG><a name="[d5]"></a>update_config_data</STRONG> (Thumb, 144 bytes, Stack size 48 bytes, upgrade.o(i.update_config_data))
+<P><STRONG><a name="[d5]"></a>update_config_data</STRONG> (Thumb, 140 bytes, Stack size 48 bytes, upgrade.o(i.update_config_data))
 <BR><BR>[Stack]<UL><LI>Max Depth = 256<LI>Call Chain = update_config_data &rArr; Update_Up_Status &rArr; I2cEepromWrite &rArr; HAL_I2C_Mem_Write &rArr; I2C_RequestMemoryWrite &rArr; I2C_WaitOnMasterAddressFlagUntilTimeout
 </UL>
 <BR>[Calls]<UL><LI><a href="#[dc]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;Update_Up_Status

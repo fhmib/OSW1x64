@@ -8,10 +8,10 @@
 
 const char *INVALID_ARG = "Invalid arguments";
 const char *HELP = "help";
-#define CMD_FAILED "Command execution failed, Returned code is %#X\n"
-#define CMD_SUCCESS "Command executed successfully\n"
 #define UP_SUCCESS "Package %u send success\n"
 
+#define FW_BLOCK_MAX_SIZE 1024
+#define TO_STR(s) #s
 #if 0
 #define GET_RESULT()  do {\
                         if (ret >= 0) {\
@@ -26,50 +26,19 @@ const char *HELP = "help";
                       } while(0)
 #endif
 
-uint8_t fw_buf[40 * 1024];
+uint8_t fw_buf[50 * 1024];
 uint8_t rBuf[TRANS_MAX_LENGTH];
+uint8_t txBuf[FW_BLOCK_MAX_SIZE + 12];
+uint32_t block_size = FW_BLOCK_MAX_SIZE;
 uint32_t rLen;
 
-
-int8_t cmd_version(uint8_t argc, char **argv)
-{
-  int8_t ret;
-  uint8_t buf[4] = {0};
-  uint8_t *p;
-
-  if (argc > 1) {
-    cmd_help2(argv[0]);
-    return 0;
-  }
-
-  ret = process_command(CMD_QUERY_VERSION, buf, 4, rBuf, &rLen);
-  
-  if (ret) {
-    return ret;
-  }
-
-  //PRINT_HEX("Received", rBuf, rLen);
-
-  p = rBuf + CMD_SEQ_MSG_DATA;
-  p += 4;
-  p += 16;
-  PRINT("Product Number: %s\n", (char*)p);
-  p += 10;
-  PRINT("Manufacture Date: %s\n", (char*)p);
-  p += 10;
-  PRINT("Firmware Version: %s\n", (char*)p);
-  p += 37;
-  PRINT("Assembly Serial Number: %s\n", (char*)p);
-  p += 20;
-  PRINT("Filter Serial Number: %s\n", (char*)p);
-
-  return ret;
-}
 
 int8_t cmd_upgrade(uint8_t argc, char **argv)
 {
   if (argc == 2 && !strcmp(argv[1], "init")) {
     return upgrade_init();
+  } else if (argc == 3 && !strcmp(argv[1], "init")) {
+    return upgrade_init_with_size(argv[2]);
   } else if (argc == 2 && !strcmp(argv[1], "file")) {
     return upgrade_file();
   } else if (argc == 2 && !strcmp(argv[1], "install")) {
@@ -80,22 +49,35 @@ int8_t cmd_upgrade(uint8_t argc, char **argv)
   return 0;
 }
 
-#define FW_BLOCK_SIZE 1024
 int8_t upgrade_init()
 {
-  uint8_t buf[12];
-
+  block_size = FW_BLOCK_MAX_SIZE;
   PRINT("Initialize Upgrade\n");
-  *(uint32_t*)(&buf[0]) = switch_endian(1);
-  *(uint32_t*)(&buf[4]) = switch_endian(FW_BLOCK_SIZE);
-  *(uint32_t*)(&buf[8]) = 0;
-  return process_command(CMD_UPGRADE_INIT, buf, 12, rBuf, &rLen);
+  *(uint32_t*)(&txBuf[0]) = switch_endian(1);
+  *(uint32_t*)(&txBuf[4]) = switch_endian(block_size);
+  *(uint32_t*)(&txBuf[8]) = 0;
+  *(uint32_t*)(&txBuf[12]) = 0;
+  return process_command(CMD_UPGRADE_INIT, txBuf, 16, rBuf, &rLen);
+}
+
+int8_t upgrade_init_with_size(char *arg)
+{
+  block_size = strtoul(arg, NULL, 0);
+  if (block_size > FW_BLOCK_MAX_SIZE || block_size < 256) {
+    block_size = FW_BLOCK_MAX_SIZE;
+    EPT("Block size exceed limitation, default to " TO_STR(FW_BLOCK_MAX_SIZE) "\n");
+  }
+  PRINT("Initialize Upgrade\n");
+  *(uint32_t*)(&txBuf[0]) = switch_endian(1);
+  *(uint32_t*)(&txBuf[4]) = switch_endian(block_size);
+  *(uint32_t*)(&txBuf[8]) = 0;
+  *(uint32_t*)(&txBuf[12]) = 0;
+  return process_command(CMD_UPGRADE_INIT, txBuf, 16, rBuf, &rLen);
 }
 
 int8_t upgrade_file()
 {
   int8_t ret;
-  uint8_t buf[FW_BLOCK_SIZE + 4 + 4];
   uint32_t fw_crc, seq = 1;
   uint32_t fw_length, every_size, send_size = 0;
   uint8_t retry = 0;
@@ -124,13 +106,14 @@ int8_t upgrade_file()
 
   PRINT2("Sending image...\n");
   while (send_size < fw_length + FW_FILE_HEADER_LENGTH) {
-    *(uint32_t*)(&buf[0]) = switch_endian(seq);
-    every_size = send_size + FW_BLOCK_SIZE > fw_length + FW_FILE_HEADER_LENGTH ?\
-                 fw_length + FW_FILE_HEADER_LENGTH - send_size : FW_BLOCK_SIZE ;
-    *(uint32_t*)(&buf[4]) = switch_endian(every_size);
+    *(uint32_t*)(&txBuf[0]) = switch_endian(seq);
+    every_size = send_size + block_size > fw_length + FW_FILE_HEADER_LENGTH ?\
+                 fw_length + FW_FILE_HEADER_LENGTH - send_size : block_size ;
+    *(uint32_t*)(&txBuf[4]) = switch_endian(every_size);
     //PRINT2("send_size = %u\n", send_size);
-    memcpy(&buf[8], &fw_buf[send_size], every_size);
-    ret = process_command(CMD_UPGRADE_DATA, buf, 8 + every_size, rBuf, &rLen);
+    memcpy(&txBuf[8], &fw_buf[send_size], every_size);
+    *(uint32_t*)(&txBuf[8 + every_size]) = 0;
+    ret = process_command(CMD_UPGRADE_DATA, txBuf, 12 + every_size, rBuf, &rLen);
     if (ret) {
       if (seq == 1 && retry < 3) {
         PRINT2("Retry\n");
@@ -156,17 +139,172 @@ int8_t upgrade_file()
 
 int8_t upgrade_install()
 {
-  uint8_t buf[4] = {0};
-  return process_command(CMD_UPGRADE_INSTALL, buf, 4, rBuf, &rLen);
+  memset(txBuf, 0, 8);
+  return process_command(CMD_UPGRADE_INSTALL, txBuf, 8, rBuf, &rLen);
 }
 
-/*
+int8_t cmd_version(uint8_t argc, char **argv)
+{
+  int8_t ret;
+  uint8_t *p;
+
+  if (argc > 1) {
+    cmd_help2(argv[0]);
+    return 0;
+  }
+
+  memset(txBuf, 0, 8);
+  ret = process_command(CMD_QUERY_VERSION, txBuf, 8, rBuf, &rLen);
+  
+  if (ret) {
+    return ret;
+  }
+
+  //PRINT_HEX("Received", rBuf, rLen);
+
+  p = rBuf + CMD_SEQ_MSG_DATA;
+  p += 4;
+  p += 16;
+  PRINT("Product Number: %s\n", (char*)p);
+  p += 10;
+  PRINT("Manufacture Date: %s\n", (char*)p);
+  p += 10;
+  PRINT("Firmware Version: %s\n", (char*)p);
+  p += 37;
+  PRINT("Assembly Serial Number: %s\n", (char*)p);
+  p += 20;
+  PRINT("Filter Serial Number: %s\n", (char*)p);
+
+  return ret;
+}
+
+int8_t cmd_reset(uint8_t argc, char **argv)
+{
+  int8_t ret;
+  uint8_t *p;
+
+  if (argc > 1) {
+    cmd_help2(argv[0]);
+    return 0;
+  }
+
+  memset(txBuf, 0, 8);
+  ret = process_command(CMD_SOFTRESET, txBuf, 8, rBuf, &rLen);
+  if (ret) {
+    return ret;
+  }
+  
+  PRINT("Reset success\n");
+  p = rBuf + CMD_SEQ_MSG_DATA;
+  p += 4;
+  p += 36;
+  PRINT("Firmware Version: %s\n", (char*)p);
+  p += 37;
+  PRINT("Assembly Serial Number: %s\n", (char*)p);
+  p += 20;
+  PRINT("Filter Serial Number: %s\n", (char*)p);
+
+  return ret;
+}
+
+int8_t cmd_temp(uint8_t argc, char **argv)
+{
+  int8_t ret;
+  uint8_t *p;
+  uint32_t temp;
+
+  if (argc > 1) {
+    cmd_help2(argv[0]);
+    return 0;
+  }
+
+  memset(txBuf, 0, 8);
+  ret = process_command(CMD_QUERY_TEMP, txBuf, 8, rBuf, &rLen);
+  if (ret) {
+    return ret;
+  }
+  
+  p = rBuf + CMD_SEQ_MSG_DATA;
+  temp = Buffer_To_BE32(p);
+  PRINT("Temperature: %.1lf\n", (double)temp/10);
+
+  return ret;
+}
+
+int8_t cmd_device_status(uint8_t argc, char **argv)
+{
+  int8_t ret;
+  uint8_t *p;
+  uint32_t temp;
+
+  if (argc > 1) {
+    cmd_help2(argv[0]);
+    return 0;
+  }
+
+  memset(txBuf, 0, 8);
+  ret = process_command(CMD_DEVICE_STATUS, txBuf, 8, rBuf, &rLen);
+  if (ret) {
+    return ret;
+  }
+  
+  p = rBuf + CMD_SEQ_MSG_DATA;
+  temp = Buffer_To_BE32(p);
+  if (temp == 0) {
+    PRINT("Device in normal status\n");
+  } else if (temp == 0xA5) {
+    PRINT("Device in error status\n");
+  } else {
+    PRINT("Unknown status\n");
+  }
+
+  return ret;
+}
+
+int8_t cmd_time(uint8_t argc, char **argv)
+{
+  if (argc == 8 && !strcmp(argv[1], "set")) {
+    return set_log_time(argc - 2, argv + 2);
+  } else if (argc == 2 && !strcmp(argv[1], "get")) {
+    return get_log_time();
+  } else {
+    cmd_help2(argv[0]);
+  }
+  return 0;
+}
+
+int8_t set_log_time(uint8_t argc, char **argv)
+{
+  sprintf((char*)txBuf, "%04lu%02lu%02lu%02lu%02lu%02lu", strtoul(argv[0], NULL, 10),\
+    strtoul(argv[1], NULL, 10), strtoul(argv[2], NULL, 10), strtoul(argv[3], NULL, 10), \
+    strtoul(argv[4], NULL, 10), strtoul(argv[5], NULL, 10));
+  PRINT("Sending date %s to module\n", txBuf);
+  memset(txBuf + 15, 0, 5);
+
+  return process_command(CMD_SET_LOG_TIME, txBuf, 20, rBuf, &rLen);
+}
+
+int8_t get_log_time(void)
+{
+  int8_t ret;
+
+  memset(txBuf, 0, 8);
+  ret = process_command(CMD_QUERY_LOG_TIME, txBuf, 8, rBuf, &rLen);
+  if (ret) {
+    return ret;
+  }
+  
+  PRINT("Received date %s\n", rBuf + CMD_SEQ_MSG_DATA);
+  
+  return ret;
+}
+
 int8_t cmd_log(uint8_t argc, char **argv)
 {
   if (argc == 2 && !strcmp(argv[1], "packets")) {
     return log_packets();
   } else if (argc == 4 && !strcmp(argv[1], "get")) {
-    return log_obtain(argv[2], argv[3]);
+    return log_content(argv[2], argv[3]);
   } else {
     cmd_help2(argv[0]);
   }
@@ -177,233 +315,104 @@ int8_t log_packets()
 {
   int8_t ret;
   uint32_t size, count;
+  uint8_t *p;
 
-  ret = process_command(CMD_LOG_NUMBER, NULL, 0, rBuf, &rLen);
-
-  GET_RESULT(ret, rBuf, rLen);
-
-  if (!ret) {
-    size = Buffer_To_BE32(&rBuf[CMD_SEQ_DATA]);
-    count = Buffer_To_BE32(&rBuf[CMD_SEQ_DATA + 4]);
-    PRINT("size = %u, packets = %u\n", size, count);
+  memset(txBuf, 0, 8);
+  ret = process_command(CMD_QUERY_LOG_NUM, txBuf, 8, rBuf, &rLen);
+  if (ret) {
+    return ret;
   }
+
+  p = rBuf + CMD_SEQ_MSG_DATA + 4;
+  size = Buffer_To_BE32(p);
+  count = Buffer_To_BE32(p + 4);
+  PRINT("size = %u, packets = %u\n", size, count);
 
   return ret;
 }
 
-int8_t log_obtain(char *arg1, char *arg2)
+int8_t log_content(char *arg1, char *arg2)
 {
   int8_t ret;
   uint32_t packets, number, size;
-  uint8_t buf[8];
   
   packets = strtoul(arg1, NULL, 0);
   number = strtoul(arg2, NULL, 0);
   
-  BE32_To_Buffer(packets, buf);
-  BE32_To_Buffer(number, buf + 4);
-  ret = process_command(CMD_LOG_CONTENT, buf, 8, rBuf, &rLen);
-
-  GET_RESULT(ret, rBuf, rLen);
-  if (!ret) {
-    packets = Buffer_To_BE32(&rBuf[CMD_SEQ_DATA]);
-    number = Buffer_To_BE32(&rBuf[CMD_SEQ_DATA + 4]);
-    size = Buffer_To_BE32(&rBuf[CMD_SEQ_DATA + 8]);
-    PRINT("size = %u, packets = %u, number = %u\n", size, packets, number);
-    PRINT_CHAR("LOG", &rBuf[CMD_SEQ_DATA + 12], rLen - 2 - 4 - 12);
+  BE32_To_Buffer(packets, txBuf);
+  BE32_To_Buffer(number, txBuf + 4);
+  ret = process_command(CMD_QUERY_LOG, txBuf, 8, rBuf, &rLen);
+  if (ret) {
+    return ret;
   }
+
+  packets = Buffer_To_BE32(&rBuf[CMD_SEQ_MSG_DATA]);
+  number = Buffer_To_BE32(&rBuf[CMD_SEQ_MSG_DATA + 4]);
+  size = Buffer_To_BE32(&rBuf[CMD_SEQ_MSG_DATA + 8]);
+  PRINT("size = %u, packets = %u, number = %u\n", size, packets, number);
+  PRINT_CHAR("LOG", &rBuf[CMD_SEQ_MSG_DATA + 12], rLen - CMD_SEQ_MSG_DATA - 12 - 8);
 
   return ret;
 }
 
-int8_t cmd_upgrade(uint8_t argc, char **argv)
+
+int8_t cmd_for_debug(uint8_t argc, char **argv)
 {
-  if (argc == 3 && !strcmp(argv[1], "mode")) {
-    return upgrade_mode(argv[2]);
-  } else if (argc == 2 && !strcmp(argv[1], "file")) {
-    return upgrade_file();
-  } else if (argc == 2 && !strcmp(argv[1], "run")) {
-    return upgrade_run();
+  if (argc == 5 && !strcmp(argv[1], "dac")) {
+    return debug_dac(argc, argv);
   } else {
     cmd_help2(argv[0]);
+    return 0;
   }
-  return 0;
 }
 
-int8_t upgrade_mode(char *arg)
+int8_t debug_dac(uint8_t argc, char **argv)
 {
+  uint32_t sw_num, temp1, temp2;
+  int32_t val_x, val_y;
   int8_t ret;
-  uint8_t buf;
 
-  if (!strcmp(arg, "0")) {
-    PRINT("Change mode to Application\n");
-    buf = 0;
-    ret = process_command(CMD_UPGRADE_MODE, &buf, 1, rBuf, &rLen);
-  } else if (!strcmp(arg, "1")) {
-    PRINT("Change mode to Upgrade\n");
-    buf = 1;
-    ret = process_command(CMD_UPGRADE_MODE, &buf, 1, rBuf, &rLen);
-  } else {
-    PRINT("%s\n", INVALID_ARG);
+  sw_num = strtoul(argv[2] + 2, NULL, 10);
+  if (sw_num < 1 || sw_num > 7) {
+    PRINT("Switch number invalid\n");
     return -1;
   }
-
-  GET_RESULT(ret, rBuf, rLen);
-
-  return ret;
-}
-
-int8_t upgrade_file()
-{
-  int8_t ret;
-  uint8_t buf[130];
-  uint16_t fw_crc, seq = 1;
-  uint32_t fw_length, every_size = 128, send_size = 0;
-
-  __HAL_UART_DISABLE_IT(&huart1, UART_IT_RXNE);
-  uart1_irq_sel = 0;
-  PRINT2("Download image...\n");
-
-  if (HAL_UART_Receive(&huart1, fw_buf, 256, 1000 * 60) != HAL_OK) {
-    PRINT2("Timeout\n");
-    __HAL_UART_ENABLE_IT(&huart1, UART_IT_RXNE);
-    uart1_irq_sel = 1;
-    return 0;
-  }
-  fw_length = (fw_buf[FW_FILE_FW_LENGTH] << 24) | (fw_buf[FW_FILE_FW_LENGTH + 1] << 16) |\
-           (fw_buf[FW_FILE_FW_LENGTH + 2] << 8) | (fw_buf[FW_FILE_FW_LENGTH + 3] << 0);
-  fw_crc = (fw_buf[FW_FILE_CRC] << 8) | fw_buf[FW_FILE_CRC + 1];
-  HAL_UART_Receive(&huart1, fw_buf + 256, fw_length, 0xFFFFFFFF);
-  PRINT2("Download success, Length = %u, crc = %#X\n", fw_length, fw_crc);
-  if (Cal_CRC16(&fw_buf[256], fw_length) == fw_crc) {
-    PRINT2("CRC16 success\n");
-  } else {
-    PRINT2("CRC16 failed\n");
-  }
-
-  PRINT2("Sending image...\n");
-  while (send_size < fw_length + 256) {
-    buf[0] = seq >> 8;
-    buf[1] = seq++;
-    if (every_size + send_size <= fw_length + 256) {
-      memcpy(&buf[2], &fw_buf[send_size], every_size);
-      send_size += every_size;
-    } else {
-      memset(&buf[2], 0, every_size);
-      memcpy(&buf[2], &fw_buf[send_size], fw_length + 256 - send_size);
-      send_size = fw_length + 256;
-    }
-    ret = process_command(CMD_UPGRADE_DATA, buf, 130, rBuf, &rLen);
-    if (ret >= 0) {
-      if (rBuf[rLen - 2] != 0) {
-        PRINT2(CMD_FAILED, rBuf[rLen - 2]);
-        break;
-      } else {
-        //PRINT2(UP_SUCCESS, seq - 1);
-      }
-    } else {
-      PRINT2(CMD_FAILED, ret);
-      break;
-    }
-  }
-
-  if (send_size >= fw_length + 256)
-    PRINT2("Send fw success\n");
-  else
-    PRINT2("Send fw failed\n");
-
-  __HAL_UART_ENABLE_IT(&huart1, UART_IT_RXNE);
-  uart1_irq_sel = 1;
-
-  return ret;
-}
-
-int8_t upgrade_run()
-{
-  int8_t ret;
-
-  ret = process_command(CMD_UPGRADE_RUN, NULL, 0, rBuf, &rLen);
-
-  GET_RESULT(ret, rBuf, rLen);
-
-  return ret;
-}
-
-int8_t cmd_reset(uint8_t argc, char **argv)
-{
-  int8_t ret;
-
-  if (argc > 1) {
-    cmd_help2(argv[0]);
-    return 0;
-  }
-
-  ret = process_command(CMD_SOFTRESET, NULL, 0, rBuf, &rLen);
-
-  GET_RESULT(ret, rBuf, rLen);
-
-  return ret;
-}
-
-int8_t cmd_for_test(uint8_t argc, char **argv)
-{
-  int8_t ret = 0;
-  uint8_t buf[8];
   
-  uint8_t val;
-  uint16_t count, addr;
-
-  if (argc == 2 && !strcmp(argv[1], "wd")) {
-    buf[0] = 0;
-    ret = process_command(CMD_FOR_TEST, buf, 1, rBuf, &rLen);
-    GET_RESULT(ret, rBuf, rLen);
-  } else if (argc == 6 && !strcmp(argv[1], "eeprom") && !strcmp(argv[2], "write")) {
-    addr = (uint16_t)strtoul(argv[3], NULL, 0);
-    val = (uint8_t)strtoul(argv[4], NULL, 0);
-    count = (uint16_t)strtoul(argv[5], NULL, 0);
-    buf[0] = 1;
-    buf[1] = (uint8_t)(addr >> 8);
-    buf[2] = (uint8_t)addr;
-    buf[3] = val;
-    buf[4] = (uint8_t)(count >> 8);
-    buf[5] = (uint8_t)count;
-    ret = process_command(CMD_FOR_TEST, buf, 6, rBuf, &rLen);
-    GET_RESULT(ret, rBuf, rLen);
-  } else if (argc == 5 && !strcmp(argv[1], "eeprom") && !strcmp(argv[2], "read")) {
-    addr = (uint16_t)strtoul(argv[3], NULL, 0);
-    count = (uint16_t)strtoul(argv[4], NULL, 0);
-    buf[0] = 2;
-    buf[1] = (uint8_t)(addr >> 8);
-    buf[2] = (uint8_t)addr;
-    buf[3] = (uint8_t)(count >> 8);
-    buf[4] = (uint8_t)count;
-    ret = process_command(CMD_FOR_TEST, buf, 5, rBuf, &rLen);
-    GET_RESULT(ret, rBuf, rLen);
-    if (!ret) {
-      PRINT_HEX("eeprom", &rBuf[CMD_SEQ_DATA], rLen - 2 - 4);
-    }
-  } else if (argc == 4 && !strcmp(argv[1], "spi") && !strncmp(argv[2], "chan", 4)) {
-    val = (uint8_t)strtoul(argv[3], NULL, 0);
-    buf[0] = 3;
-    buf[1] = val;
-    ret = process_command(CMD_FOR_TEST, buf, 2, rBuf, &rLen);
-    GET_RESULT(ret, rBuf, rLen);
-  } else if (argc == 4 && !strcmp(argv[1], "log")) {
-    sscanf(argv[2], "%c", &val);
-    count = (uint16_t)strtoul(argv[3], NULL, 0);
-    buf[0] = 4;
-    buf[1] = val;
-    buf[2] = (uint8_t)(count >> 8);
-    buf[3] = (uint8_t)count;
-    ret = process_command(CMD_FOR_TEST, buf, 4, rBuf, &rLen);
-    GET_RESULT(ret, rBuf, rLen);
-  } else {
-    cmd_help2(argv[0]);
+  sscanf(argv[3], "%d", &val_x);
+  if (val_x <= -16384 || val_x >= 16384) {
+    PRINT("Value x invalid\n");
+    return -2;
+  }
+  
+  sscanf(argv[4], "%d", &val_y);
+  if (val_y <= -16384 || val_y >= 16384) {
+    PRINT("Value y invalid\n");
+    return -3;
   }
 
+  BE32_To_Buffer(0x5A5AA5A5, txBuf);
+  BE32_To_Buffer(CMD_DEBUG_DAC_SW, txBuf + 4);
+  BE32_To_Buffer(sw_num, txBuf + 8);
+  BE32_To_Buffer((uint32_t)val_x, txBuf + 12);
+  BE32_To_Buffer((uint32_t)val_y, txBuf + 16);
+  ret = process_command(CMD_FOR_DEBUG, txBuf, 20, rBuf, &rLen);
+  if (ret) {
+    return ret;
+  }
+  
+  temp1 = Buffer_To_BE32(&rBuf[CMD_SEQ_MSG_DATA]);
+  temp2 = Buffer_To_BE32(&rBuf[CMD_SEQ_MSG_DATA + 4]);
+  PRINT("Positive x dac channel = %u, value = %u\n", (temp1 >> 24) & 0xFF, (temp2 >> 16) & 0xFFFF);
+  PRINT("Negative x dac channel = %u, value = %u\n", (temp1 >> 16) & 0xFF, (temp2 >> 0) & 0xFFFF);
+  temp2 = Buffer_To_BE32(&rBuf[CMD_SEQ_MSG_DATA + 8]);
+  PRINT("Positive y dac channel = %u, value = %u\n", (temp1 >> 8) & 0xFF, (temp2 >> 16) & 0xFFFF);
+  PRINT("Negative y dac channel = %u, value = %u\n", (temp1 >> 0) & 0xFF, (temp2 >> 0) & 0xFFFF);
+
   return ret;
+
 }
-*/
+
+
 
 int8_t process_command(uint32_t cmd, uint8_t *pdata, uint32_t len, uint8_t *rx_buf, uint32_t *rx_len)
 {
@@ -415,15 +424,13 @@ int8_t process_command(uint32_t cmd, uint8_t *pdata, uint32_t len, uint8_t *rx_b
   usart2_tx_buf[cmd_len++] = 0x55;
   *(uint32_t*)(&usart2_tx_buf[cmd_len]) = switch_endian(cmd);
   cmd_len += 4;
-  *(uint32_t*)(&usart2_tx_buf[cmd_len]) = switch_endian(4 * 4 + len);
+  *(uint32_t*)(&usart2_tx_buf[cmd_len]) = switch_endian(3 * 4 + len);
   cmd_len += 4;
   if (len) {
     memcpy(&usart2_tx_buf[cmd_len], pdata, len);
     cmd_len += len;
   }
-  *(uint32_t*)(&usart2_tx_buf[cmd_len]) = 0;
-  cmd_len += 4;
-  rcv_crc = Cal_CRC32((uint8_t*)&usart2_tx_buf[1], 3 * 4 + len);
+  rcv_crc = Cal_CRC32((uint8_t*)&usart2_tx_buf[1], 2 * 4 + len);
   *(uint32_t*)(&usart2_tx_buf[cmd_len]) = switch_endian(rcv_crc);
   cmd_len += 4;
 
@@ -463,7 +470,7 @@ int8_t process_command(uint32_t cmd, uint8_t *pdata, uint32_t len, uint8_t *rx_b
 
   err_code = switch_endian(*(uint32_t*)&rx_buf[1 + rcv_len - 8]);
   if (err_code != 0) {
-    PRINT(CMD_FAILED, err_code);
+    PRINT(CMD_FAILED, err_code, err_code);
     return -6;
   }
   *rx_len = rcv_len + 1;

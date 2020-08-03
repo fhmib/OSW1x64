@@ -156,7 +156,7 @@ I (../Inc/ymodem.h)(0x5EAFD29F)
 I (C:\Keil_v5\ARM\ARMCC\include\string.h)(0x5D9AD218)
 I (../Inc/menu.h)(0x5EB65C31)
 I (../Inc/usart.h)(0x5F1A8F08)
-F (..\Src\upgrade.c)(0x5F1D5D63)(--c99 -c --cpu Cortex-M4.fp.sp -D__MICROLIB -g -O3 --apcs=interwork --split_sections -I ../Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -I ../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I ../Drivers/CMSIS/Include-I.\RTE\_BOOTLOADER_F429-IC:\Users\bjfh9\AppData\Local\Arm\Packs\ARM\CMSIS\5.6.0\CMSIS\Core\Include-IC:\Users\bjfh9\AppData\Local\Arm\Packs\Keil\STM32F4xx_DFP\2.14.0\Drivers\CMSIS\Device\ST\STM32F4xx\Include-D__UVISION_VERSION="529" -D_RTE_ -DSTM32F429xx -DUSE_HAL_DRIVER -DSTM32F429xx-o bootloader_f429\upgrade.o --omf_browse bootloader_f429\upgrade.crf --depend bootloader_f429\upgrade.d)
+F (..\Src\upgrade.c)(0x5F212BE5)(--c99 -c --cpu Cortex-M4.fp.sp -D__MICROLIB -g -O3 --apcs=interwork --split_sections -I ../Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -I ../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I ../Drivers/CMSIS/Include-I.\RTE\_BOOTLOADER_F429-IC:\Users\bjfh9\AppData\Local\Arm\Packs\ARM\CMSIS\5.6.0\CMSIS\Core\Include-IC:\Users\bjfh9\AppData\Local\Arm\Packs\Keil\STM32F4xx_DFP\2.14.0\Drivers\CMSIS\Device\ST\STM32F4xx\Include-D__UVISION_VERSION="529" -D_RTE_ -DSTM32F429xx -DUSE_HAL_DRIVER -DSTM32F429xx-o bootloader_f429\upgrade.o --omf_browse bootloader_f429\upgrade.crf --depend bootloader_f429\upgrade.d)
 I (../Inc/upgrade.h)(0x5F1D5BB8)
 I (../Inc/main.h)(0x5F1A8F08)
 I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal.h)(0x5EAD3342)
@@ -195,6 +195,7 @@ I (../Inc/common.h)(0x5F1A9797)
 I (../Inc/menu.h)(0x5EB65C31)
 I (../Inc/flash_if.h)(0x5F1A8B66)
 I (../Inc/ymodem.h)(0x5EAFD29F)
+I (../Inc/i2c.h)(0x5F1A8F07)
 I (C:\Keil_v5\ARM\ARMCC\include\stdio.h)(0x5D9AD21A)
 I (C:\Keil_v5\ARM\ARMCC\include\string.h)(0x5D9AD218)
 F (../Src/main.c)(0x5F1A8F08)(--c99 -c --cpu Cortex-M4.fp.sp -D__MICROLIB -g -O3 --apcs=interwork --split_sections -I ../Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -I ../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I ../Drivers/CMSIS/Include-I.\RTE\_BOOTLOADER_F429-IC:\Users\bjfh9\AppData\Local\Arm\Packs\ARM\CMSIS\5.6.0\CMSIS\Core\Include-IC:\Users\bjfh9\AppData\Local\Arm\Packs\Keil\STM32F4xx_DFP\2.14.0\Drivers\CMSIS\Device\ST\STM32F4xx\Include-D__UVISION_VERSION="529" -D_RTE_ -DSTM32F429xx -DUSE_HAL_DRIVER -DSTM32F429xx-o bootloader_f429\main.o --omf_browse bootloader_f429\main.crf --depend bootloader_f429\main.d)

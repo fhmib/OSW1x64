@@ -139,3 +139,22 @@ osStatus_t Update_Log_Status(LogFileState *log_status)
   return RTOS_EEPROM_Write(EEPROM_ADDR, EE_LOG_OFFSET, buf, sizeof(buf));
 }
 
+uint32_t Get_SW_By_IO()
+{
+  uint32_t val = 0;
+
+  if (HAL_GPIO_ReadPin(SW_D5_GPIO_Port, SW_D5_Pin) == GPIO_PIN_SET)
+    val |= 1 << 5;
+  if (HAL_GPIO_ReadPin(SW_D4_GPIO_Port, SW_D4_Pin) == GPIO_PIN_SET)
+    val |= 1 << 4;
+  if (HAL_GPIO_ReadPin(SW_D3_GPIO_Port, SW_D3_Pin) == GPIO_PIN_SET)
+    val |= 1 << 3;
+  if (HAL_GPIO_ReadPin(SW_D2_GPIO_Port, SW_D2_Pin) == GPIO_PIN_SET)
+    val |= 1 << 2;
+  if (HAL_GPIO_ReadPin(SW_D1_GPIO_Port, SW_D1_Pin) == GPIO_PIN_SET)
+    val |= 1 << 1;
+  if (HAL_GPIO_ReadPin(SW_D0_GPIO_Port, SW_D0_Pin) == GPIO_PIN_SET)
+    val |= 1 << 0;
+  
+  return val;
+}

@@ -55,5 +55,6 @@ osStatus_t Update_Up_Status(UpgradeFlashState *status);
 osStatus_t Get_Log_Status(LogFileState *log_status);
 osStatus_t Update_Log_Status(LogFileState *log_status);
 
+uint32_t Get_SW_By_IO(void);
 
 #endif

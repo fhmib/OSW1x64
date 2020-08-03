@@ -5,12 +5,14 @@
 #include "cmsis_os.h"
 
 extern char *fw_version;
+extern char *serial_number;
+extern char *filter_number;
 
 #define TRANS_START_BYTE            0x55
 #define TRANS_MAX_LENGTH            1200
 #define TRANS_WAIT_HEAD_TIME        20    //ms
 #define TRANS_WAIT_TIME             500   //ms
-#define COMMAND_PROCESS_TIME        800   //ms
+#define COMMAND_PROCESS_TIME        900   //ms
 
 // Respond Code
 #define  RESPOND_SUCCESS            0x00000000
@@ -21,6 +23,7 @@ extern char *fw_version;
 #define  RESPOND_UNKNOWN_CMD        0x00002783
 #define  RESPOND_RESET_FAIL         0x00002784 //Reset Failure and Reboot from previous version of firmware
 #define  RESPOND_DL_CHK_ERR         0xFFFFFFF6 //Downloaded Firmware Checksum Does Not Match Firmware Header
+#define  RESPOND_DL_INSTALL_FAIL    0xFFFFFFF7 //Firmware Failed to Install, Flash Switch Did Not Complete
 #define  RESPOND_FAILURE            0xFFFFFFFF //Downloaded Firmware Checksum Does Not Match Firmware Header
 
 
@@ -98,8 +101,8 @@ typedef enum {
 
 typedef struct {
   uint8_t run;
+  uint8_t is_erasing;
   
-  uint8_t flash_in_use;
   uint32_t upgrade_addr;
   uint32_t upgrade_sector;
   
@@ -129,8 +132,14 @@ uint32_t Cmd_Process(void);
 int Uart_Respond(uint32_t cmd, uint32_t status, uint8_t *pdata, uint32_t len);
 
 uint32_t Cmd_Upgrade_Init(void);
-uint32_t Cmd_Get_Version(void);
+uint32_t Cmd_Upgrade_Data(void);
 uint32_t Cmd_Upgrade_Install(void);
+uint32_t Cmd_Get_Version(void);
+uint32_t Cmd_Softreset(void);
+uint32_t Cmd_Get_Temperature(void);
+uint32_t Cmd_Device_Status(void);
+uint32_t Cmd_LOG_Number(void);
+uint32_t Cmd_LOG_Content(void);
 
 
 

@@ -7,6 +7,7 @@
 #include "iwdg.h"
 #include "i2c.h"
 #include "spi.h"
+#include "rtc.h"
 
 TransStu trans_buf;
 RespondStu resp_buf;
@@ -15,9 +16,19 @@ UpgradeStruct up_state;
 
 char *product_number = "01234567"; //8 bytes
 char *manu_date = "20200720"; // 8 bytes
-char *fw_version = "ONET00.0100.07"; // 14 bytes
+char *fw_version = "ONET00.0100.14"; // 14 bytes
 char *serial_number = " Pxxxx-xxxxxx"; //16 bytes
 char *filter_number = "";
+
+SwitchMapStruct switch_map[] = {
+  {SWITCH_NUM_1,  6,  2,  3,  5},
+  {SWITCH_NUM_2,  4,  8,  1,  0},
+  {SWITCH_NUM_3, 12, 10,  7,  9},
+  {SWITCH_NUM_4, 14, 13, 15, 11},
+  {SWITCH_NUM_5, 22, 17, 26, 21},
+  {SWITCH_NUM_6, 18, 20, 19, 16},
+  {SWITCH_NUM_7, 23, 29, 31, 25}
+};
 
 extern UpgradeFlashState upgrade_status;
 
@@ -31,13 +42,15 @@ CmdStruct command_list[] = {
   {CMD_DEVICE_STATUS, Cmd_Device_Status},
   {CMD_QUERY_VOLTAGE, NULL},
   {CMD_QUERY_VOL_THR, NULL},
-  {CMD_SET_LOG_TIME, NULL},
-  {CMD_QUERY_LOG_TIME, NULL},
-  {CMD_QUERY_LOG_NUM, NULL},
-  {CMD_QUERY_LOG, NULL},
+  {CMD_SET_LOG_TIME, Cmd_Set_Time},
+  {CMD_QUERY_LOG_TIME, Cmd_Get_Time},
+  {CMD_QUERY_LOG_NUM, Cmd_LOG_Number},
+  {CMD_QUERY_LOG, Cmd_LOG_Content},
   {CMD_QUERY_IL, NULL},
   {CMD_SET_SWITCH, NULL},
   {CMD_QUERY_SWITCH, NULL},
+
+  {CMD_FOR_DEBUG, Cmd_For_Debug},
 };
 
 uint32_t Cmd_Process()
@@ -287,8 +300,6 @@ uint32_t Cmd_Softreset()
 {
   // TODO: Save system configuration data
 
-  Uart_Respond(RESPOND_SUCCESS, CMD_SOFTRESET, NULL, 0);
-
   __NVIC_SystemReset();
 
   return RESPOND_SUCCESS;
@@ -330,6 +341,54 @@ uint32_t Cmd_Device_Status()
 {
   *(uint32_t*)resp_buf.buf = 0;
   FILL_RESP_MSG(CMD_DEVICE_STATUS, RESPOND_SUCCESS, 4);
+  return RESPOND_SUCCESS;
+}
+
+uint32_t Cmd_Set_Time(void)
+{
+  char buf[5] = {0};
+  RTC_DateTypeDef date;
+  RTC_TimeTypeDef time;
+  uint32_t temp;
+
+  memset(resp_buf.buf, 0, 4);
+  memset(&time, 0, sizeof(time));
+  date.WeekDay = 1;
+  memcpy(buf, trans_buf.buf + CMD_SEQ_MSG_DATA, 4);
+  temp = strtoul(buf, NULL, 10) - 2000;
+  date.Year = (uint8_t)temp;
+  buf[2] = 0;
+  memcpy(buf, trans_buf.buf + CMD_SEQ_MSG_DATA + 4, 2);
+  date.Month = (uint8_t)strtoul(buf, NULL, 10);
+  memcpy(buf, trans_buf.buf + CMD_SEQ_MSG_DATA + 6, 2);
+  date.Date = (uint8_t)strtoul(buf, NULL, 10);
+  memcpy(buf, trans_buf.buf + CMD_SEQ_MSG_DATA + 8, 2);
+  time.Hours = (uint8_t)strtoul(buf, NULL, 10);
+  memcpy(buf, trans_buf.buf + CMD_SEQ_MSG_DATA + 10, 2);
+  time.Minutes = (uint8_t)strtoul(buf, NULL, 10);
+  memcpy(buf, trans_buf.buf + CMD_SEQ_MSG_DATA + 12, 2);
+  time.Seconds = (uint8_t)strtoul(buf, NULL, 10);
+  EPT("Set time to %u-%u-%u %u:%u:%u\n", 2000 + date.Year, date.Month, date.Date, time.Hours, time.Minutes, time.Seconds);
+  HAL_RTC_SetTime(&hrtc, &time, RTC_FORMAT_BIN);
+  HAL_RTC_SetDate(&hrtc, &date, RTC_FORMAT_BIN);
+
+  FILL_RESP_MSG(CMD_SET_LOG_TIME, RESPOND_SUCCESS, 4);
+  return RESPOND_SUCCESS;
+}
+
+uint32_t Cmd_Get_Time(void)
+{
+  RTC_DateTypeDef date;
+  RTC_TimeTypeDef time;
+  
+  HAL_RTC_GetTime(&hrtc, &time, RTC_FORMAT_BIN);
+  HAL_RTC_GetDate(&hrtc, &date, RTC_FORMAT_BIN);
+  EPT("Get time %04u-%02u-%02u %02u:%02u:%02u\n", 2000 + date.Year, date.Month, date.Date, time.Hours, time.Minutes, time.Seconds);
+  sprintf((char*)resp_buf.buf, "%04u%02u%02u%02u%02u%02u", 2000 + date.Year, date.Month, date.Date, time.Hours, time.Minutes, time.Seconds);
+  resp_buf.buf[14] = 0;
+  resp_buf.buf[15] = 0;
+
+  FILL_RESP_MSG(CMD_QUERY_LOG_TIME, RESPOND_SUCCESS, 16);
   return RESPOND_SUCCESS;
 }
 
@@ -405,4 +464,110 @@ uint32_t Cmd_LOG_Content()
   Log_Read(addr, resp_buf.buf + 12, size);
   FILL_RESP_MSG(CMD_QUERY_LOG, RESPOND_SUCCESS, 12 + size);
   return RESPOND_SUCCESS;
+}
+
+uint32_t Cmd_For_Debug()
+{
+  uint8_t *prdata = trans_buf.buf + CMD_SEQ_MSG_DATA;
+  uint16_t dac_px_val, dac_nx_val, dac_py_val, dac_ny_val;
+  uint32_t i, sw_num;
+  int32_t val_x, val_y;
+  HAL_StatusTypeDef status;
+
+  uint32_t temp = Buffer_To_BE32(prdata);
+  memset(resp_buf.buf, 0, 4);
+  if (temp != 0x5A5AA5A5) {
+    FILL_RESP_MSG(CMD_FOR_DEBUG, RESPOND_UNKNOWN_CMD, 4);
+    return RESPOND_UNKNOWN_CMD;
+  }
+  
+  temp = Buffer_To_BE32(prdata + 4);
+  if (temp == CMD_DEBUG_DAC_SW) {
+    sw_num = Buffer_To_BE32(prdata + 8);
+    val_x = (int32_t)Buffer_To_BE32(prdata + 12);
+    val_y = (int32_t)Buffer_To_BE32(prdata + 16);
+    if (sw_num == 0 || sw_num >= SWITCH_NUM_TOTAL) {
+      FILL_RESP_MSG(CMD_FOR_DEBUG, RESPOND_FAILURE, 4);
+      return RESPOND_FAILURE;
+    }
+    for (i = 0; i < sizeof(switch_map)/sizeof(switch_map[0]); ++i) {
+      if (switch_map[i].sw_num == sw_num) {
+        // x
+        if (val_x >= 0) {
+          dac_px_val = (uint16_t)val_x;
+          dac_nx_val = 0;
+        } else {
+          dac_px_val = 0;
+          dac_nx_val = (uint16_t)my_abs(val_x);
+        }
+        // y
+        if (val_y >= 0) {
+          dac_py_val = (uint16_t)val_y;
+          dac_ny_val = 0;
+        } else {
+          dac_py_val = 0;
+          dac_ny_val = (uint16_t)my_abs(val_y);
+        }
+        break;
+      }
+    }
+    EPT("Debug: sw_num = %u, px = %u, nx = %u, py = %u, ny = %u\n", sw_num, dac_px_val, dac_nx_val, dac_py_val, dac_ny_val);
+    // write dac
+    status = SW_Dac_Write(switch_map[i].px_chan, dac_px_val);
+    status = SW_Dac_Write(switch_map[i].nx_chan, dac_nx_val);
+    status = SW_Dac_Write(switch_map[i].py_chan, dac_py_val);
+    status = SW_Dac_Write(switch_map[i].ny_chan, dac_ny_val);
+    if (status != HAL_OK) {
+      EPT("Write dac failed\n");
+      FILL_RESP_MSG(CMD_FOR_DEBUG, RESPOND_FAILURE, 4);
+      return RESPOND_FAILURE;
+    }
+    val_x = switch_map[i].px_chan << 24;
+    val_x |= switch_map[i].nx_chan << 16;
+    val_x |= switch_map[i].py_chan << 8;
+    val_x |= switch_map[i].ny_chan << 0;
+    BE32_To_Buffer(val_x, resp_buf.buf);
+    val_x = dac_px_val << 16;
+    val_x |= dac_nx_val << 0;
+    BE32_To_Buffer(val_x, resp_buf.buf + 4);
+    val_x = dac_py_val << 16;
+    val_x |= dac_ny_val << 0;
+    BE32_To_Buffer(val_x, resp_buf.buf + 8);
+    FILL_RESP_MSG(CMD_FOR_DEBUG, RESPOND_SUCCESS, 12);
+    return RESPOND_SUCCESS;
+  }
+
+  FILL_RESP_MSG(CMD_FOR_DEBUG, RESPOND_UNKNOWN_CMD, 4);
+  return RESPOND_UNKNOWN_CMD;
+}
+
+HAL_StatusTypeDef SW_Dac_Write(uint8_t chan, uint16_t val)
+{
+  HAL_StatusTypeDef status = HAL_OK;
+  uint8_t buf[3];
+
+  buf[0] = ((chan & 0x1F) << 3) | ((val >> 11) & 0x7);
+  buf[1] = val >> 3;
+  buf[2] = (val & 0x7) << 5;
+  EPT("Dac value: %#X %#X %#X\n", buf[0], buf[1], buf[2]);
+  HAL_GPIO_WritePin(SPI1_CS_GPIO_Port, SPI1_CS_Pin, GPIO_PIN_RESET);
+  status = HAL_SPI_Transmit(&hspi1, buf, 3, 50);
+  HAL_GPIO_WritePin(SPI1_CS_GPIO_Port, SPI1_CS_Pin, GPIO_PIN_SET);
+
+  return status;
+}
+
+uint32_t my_abs(int32_t val)
+{
+  char buf[32];
+  uint32_t p_val;
+  
+  sprintf(buf, "%d", val);
+  if (buf[0] == '-') {
+    p_val = strtoul(buf + 1, NULL, 10);
+  } else {
+    p_val = val;
+  }
+  
+  return p_val;
 }

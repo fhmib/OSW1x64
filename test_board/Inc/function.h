@@ -28,8 +28,12 @@ typedef enum {
   CMD_QUERY_SWITCH        = 0xD0, // Switch Status Request
 
   // for test
-  CMD_FOR_TEST            = 0xFF,
+  CMD_FOR_DEBUG           = 0x7FFFFFFF,
 } CmdId;
+
+typedef enum {
+  CMD_DEBUG_DAC_SW        = 0x01,
+} CmdDebugId;
 
 typedef enum {
   FW_HEAD_MODULE_NAME    = 0x00,
@@ -40,22 +44,23 @@ typedef enum {
 } FwFileHeader;
 
 
-int8_t cmd_version(uint8_t argc, char **argv);
 int8_t cmd_upgrade(uint8_t argc, char **argv);
 int8_t upgrade_init(void);
+int8_t upgrade_init_with_size(char *arg);
 int8_t upgrade_file(void);
 int8_t upgrade_install(void);
-/*
+int8_t cmd_version(uint8_t argc, char **argv);
+int8_t cmd_reset(uint8_t argc, char **argv);
+int8_t cmd_temp(uint8_t argc, char **argv);
+int8_t cmd_device_status(uint8_t argc, char **argv);
+int8_t cmd_time(uint8_t argc, char **argv);
+int8_t set_log_time(uint8_t argc, char **argv);
+int8_t get_log_time(void);
 int8_t cmd_log(uint8_t argc, char **argv);
 int8_t log_packets(void);
-int8_t log_obtain(char *arg1, char *arg2);
-int8_t cmd_upgrade(uint8_t argc, char **argv);
-int8_t upgrade_mode(char *arg);
-int8_t upgrade_file(void);
-int8_t upgrade_run(void);
-int8_t cmd_reset(uint8_t argc, char **argv);
-int8_t cmd_for_test(uint8_t argc, char **argv);
-*/
+int8_t log_content(char *arg1, char *arg2);
+int8_t cmd_for_debug(uint8_t argc, char **argv);
+int8_t debug_dac(uint8_t argc, char **argv);
 
 int8_t process_command(uint32_t cmd, uint8_t *pdata, uint32_t len, uint8_t *rx_buf, uint32_t *rx_len);
 uint8_t Cal_Check(uint8_t *pdata, uint32_t len);

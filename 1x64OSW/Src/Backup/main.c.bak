@@ -25,6 +25,7 @@
 #include "dma.h"
 #include "i2c.h"
 #include "iwdg.h"
+#include "rtc.h"
 #include "spi.h"
 #include "usart.h"
 #include "gpio.h"
@@ -51,15 +52,18 @@
 
 /* USER CODE BEGIN PV */
 uint8_t reset_flag = 0;
+uint8_t flash_in_use;
 UpgradeFlashState upgrade_status;
-
+LogFileState log_file_state;
+const uint32_t file_flash_addr[] =  {  0x08080000, 0x08084000, 0x08088000 };
+const uint32_t file_flash_end = 0x0808BFFF;
+const uint8_t file_flash_count = sizeof(file_flash_addr) / sizeof (file_flash_addr[0]);
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 void MX_FREERTOS_Init(void);
 /* USER CODE BEGIN PFP */
-void OSW_Init(void);
 
 /* USER CODE END PFP */
 
@@ -107,8 +111,8 @@ int main(void)
   MX_SPI5_Init();
   MX_USART1_UART_Init();
   MX_USART3_UART_Init();
+  MX_RTC_Init();
   /* USER CODE BEGIN 2 */
-  OSW_Init();
 
   /* USER CODE END 2 */
   /* Init scheduler */
@@ -141,6 +145,7 @@ void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+  RCC_PeriphCLKInitTypeDef PeriphClkInitStruct = {0};
 
   /** Configure the main internal regulator output voltage 
   */
@@ -180,11 +185,21 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+  PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_RTC;
+  PeriphClkInitStruct.RTCClockSelection = RCC_RTCCLKSOURCE_LSI;
+  if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
+  {
+    Error_Handler();
+  }
 }
 
 /* USER CODE BEGIN 4 */
+extern RespondStu resp_buf;
 void OSW_Init(void)
 {
+  osStatus_t status;
+  uint32_t i;
+  char *p = (char*)resp_buf.buf;
 
   EPT("Firmware version: %s\n", fw_version);
 
@@ -203,6 +218,16 @@ void OSW_Init(void)
   if (__HAL_RCC_GET_FLAG(RCC_FLAG_SFTRST) != RESET){
     SET_RESETFLAG(SFT_RESET_BIT);
     EPT("Software Reset is set\n");
+    memset(p, 116, 0);
+    p += 4;
+    p += 36;
+    strcpy(p, fw_version);
+    p += 37;
+    strcpy(p, serial_number);
+    p += 20;
+    strcpy(p, filter_number);
+    p += 23;
+    Uart_Respond(CMD_SOFTRESET, RESPOND_SUCCESS, resp_buf.buf, 120);
   }
   if (__HAL_RCC_GET_FLAG(RCC_FLAG_IWDGRST) != RESET){
     SET_RESETFLAG(IWDG_RESET_BIT);
@@ -221,14 +246,19 @@ void OSW_Init(void)
   }
 */
   __HAL_RCC_CLEAR_RESET_FLAGS();
-  
+
+  // upgrade
   up_state.run = RUN_MODE_APPLICATION;
-  up_state.flash_in_use = 0;
+  up_state.is_erasing = 0;
+  flash_in_use = 0;
   
   FLASH_If_Init();
-  Get_Up_Status(&upgrade_status);
-  EPT("f_state: %#X, %u, %#X, %u, %#X, %u\n", upgrade_status.magic, upgrade_status.run, upgrade_status.crc32, \
-      upgrade_status.length, upgrade_status.factory_crc32, upgrade_status.factory_length);
+  status = Get_Up_Status(&upgrade_status);
+  if (status) {
+    EPT("Get upgrade status failed, status = %u\n", status);
+  }
+  EPT("upgrade_status: %#X, %u, %u, %u, %#X, %u, %#X\n", upgrade_status.magic, upgrade_status.run, upgrade_status.flash_empty, upgrade_status.length, upgrade_status.crc32,\
+                upgrade_status.factory_length, upgrade_status.factory_crc32);
 
   if (upgrade_status.magic != UPGRADE_MAGIC) {
     EPT("Verify f_state.magic failed\n");
@@ -257,7 +287,8 @@ void OSW_Init(void)
   }
   EPT("FLASH->OPTCR = %#X\n", FLASH->OPTCR);
   if (!upgrade_status.flash_empty) {
-    up_state.flash_in_use = 1;
+    flash_in_use = 1;
+    up_state.is_erasing = 1;
     // erase flash
     EPT("flash is not empty\n");
     if (up_state.upgrade_addr != RESERVE_ADDRESS)
@@ -266,28 +297,54 @@ void OSW_Init(void)
   } else {
     EPT("flash is empty\n");
   }
+  
+  // log
+  Get_Log_Status(&log_file_state);
+  EPT("log_file_state: %#X, %#X\n", log_file_state.offset, log_file_state.header);
+  for (i = 0; i < file_flash_count - 1; ++i) {
+    if (log_file_state.offset < file_flash_addr[i + 1]) {
+      break;
+    }
+  }
+  log_file_state.cur_sector = LOG_FIRST_SECTOR + i;
+
+  Throw_Log((uint8_t*)"OSW1x64 program\n", 16);
 
 }
 
 extern FLASH_ProcessTypeDef pFlash;
 extern osMutexId_t i2cMutex;
 extern osMessageQueueId_t mid_ISR;
+extern osSemaphoreId_t logEraseSemaphore;
 void HAL_FLASH_EndOfOperationCallback(uint32_t ReturnValue)
 {
   MsgStruct isr_msg;
   if (0xFFFFFFFFU == ReturnValue) {
     EPT("Erase flash operation completely\n");
     HAL_FLASH_Lock();
-    up_state.flash_in_use = 0;
-    upgrade_status.flash_empty = 1;
-    isr_msg.type = MSG_TYPE_FLASH_ISR;
-    osMessageQueuePut(mid_ISR, &isr_msg, 0U, 0U);
-    #if 0
-    if (pFlash.Sector >= LOG_FIRST_SECTOR) {
+    flash_in_use = 0;
+    if (up_state.is_erasing == 0) {
       // send signal to logTask
       osSemaphoreRelease(logEraseSemaphore);
+    } else {
+      upgrade_status.flash_empty = 1;
+      up_state.is_erasing = 0;
+      isr_msg.type = MSG_TYPE_FLASH_ISR;
+      osMessageQueuePut(mid_ISR, &isr_msg, 0U, 0U);
     }
-    #endif
+  }
+}
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+  uint32_t sw_num;
+
+  if (GPIO_Pin == GPIO_PIN_13) {
+    if (HAL_GPIO_ReadPin(SW_MODE_SEL_GPIO_Port, SW_MODE_SEL_Pin) == GPIO_PIN_SET) {
+      EPT("Switch strobe signal come but switch mode is set\n");
+    } else {
+      sw_num = Get_SW_By_IO();
+      EPT("Switch number is %u\n", sw_num);
+    }
   }
 }
 

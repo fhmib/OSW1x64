@@ -3,6 +3,7 @@
 #include "common.h"
 #include "menu.h"
 #include "flash_if.h"
+#include "i2c.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -14,6 +15,9 @@ void startup_process()
   if (Get_Up_Status(&f_state) != HAL_OK) {
     sprintf((char*)buf, "Get upgrade status failed 1\n");
     Serial_PutString(buf);
+    sprintf((char*)buf, "I2c_State = %#X, CR1 = %#X, SR1 = %#X, SR2 = %#X, errCode = %#X\n", hi2c1.State, hi2c1.Instance->CR1, hi2c1.Instance->SR1, hi2c1.Instance->SR2, hi2c1.ErrorCode);
+    Serial_PutString(buf);
+    return;
   }
   if (f_state.magic != 0xAA) {
     sprintf((char*)buf, "state is uninitialized, boot from factory\n");
@@ -22,11 +26,14 @@ void startup_process()
     if (Get_Up_Status(&f_state) != HAL_OK) {
       sprintf((char*)buf, "Get upgrade status failed 2\n");
       Serial_PutString(buf);
+      return;
     }
   }
 
   sprintf((char*)buf, "f_state: %#X, %u, %u, %u, %#X, %u, %#X\n", f_state.magic, f_state.run, f_state.flash_empty, f_state.length, f_state.crc32,\
                 f_state.factory_length, f_state.factory_crc32);
+  Serial_PutString(buf);
+  sprintf((char*)buf, "I2c_State = %#X, CR1 = %#X, SR1 = %#X, SR2 = %#X, errCode = %#X\n", hi2c1.State, hi2c1.Instance->CR1, hi2c1.Instance->SR1, hi2c1.Instance->SR2, hi2c1.ErrorCode);
   Serial_PutString(buf);
 
   if (f_state.run == 0) {
@@ -93,13 +100,14 @@ void update_config_data(uint32_t addr, uint32_t size)
     log_state.offset = 0x08080000;
     if (Update_Log_Status(&log_state) != HAL_OK) {
       Serial_PutString((uint8_t *)"Update log status failed in update_config_data\n");
+      return;
     }
     Serial_PutString((uint8_t *)"Erasing bank 2...\n");
     FLASH_If_Erase_Bank(FLASH_BANK_2);
   } else {
-    //memcpy(&f_state, (void*)CONFIG_ADDRESS, sizeof(UpgradeFlashState));
     if (Get_Up_Status(&f_state) != HAL_OK) {
       Serial_PutString((uint8_t *)"Get upgrade status failed in update_config_data\n");
+      return;
     }
     f_state.run = addr == APPLICATION_1_ADDRESS ? 1 : 2;
     f_state.flash_empty = 0;
@@ -109,9 +117,8 @@ void update_config_data(uint32_t addr, uint32_t size)
 
   if (Update_Up_Status(&f_state) != HAL_OK) {
     Serial_PutString((uint8_t *)"Update upgrade status failed in update_config_data\n");
+    return;
   }
-  //FLASH_If_Erase(CONFIG_SECTOR);
-  //FLASH_If_Write(CONFIG_ADDRESS, (uint32_t*)&f_state, sizeof(UpgradeFlashState) / 4);
 }
 
 HAL_StatusTypeDef Get_Up_Status(UpgradeFlashState *up_status)
@@ -157,7 +164,7 @@ void erase_up_status(void)
   
   memset(ebuf, 0xFF, EE_UP_FACTORY_CRC32 + 4);
   if ((status = I2cEepromWrite(EEPROM_ADDR, EE_UP_MAIGC, ebuf, sizeof(ebuf))) != HAL_OK) {
-    sprintf((char*)buf, "erase failed, status = %u\n", status);
+    sprintf((char*)buf, "erase failed, status = %u, I2c_State = %#X, CR1 = %#X, SR1 = %#X, SR2 = %#X, errCode = %#X\n", status, hi2c1.State, hi2c1.Instance->CR1, hi2c1.Instance->SR1, hi2c1.Instance->SR2, hi2c1.ErrorCode);
     Serial_PutString(buf);
   }
 }
@@ -166,11 +173,17 @@ void print_up_status(void)
 {
   UpgradeFlashState up_status;
   uint8_t buf[256];
-  
-  Get_Up_Status(&up_status);
-  sprintf((char*)buf, "up_status: %#X, %u, %u, %u, %#X, %u, %#X\n", up_status.magic, up_status.run, up_status.flash_empty, up_status.length, up_status.crc32,\
-                up_status.factory_length, up_status.factory_crc32);
-  Serial_PutString(buf);
+  HAL_StatusTypeDef status;
+
+  status = Get_Up_Status(&up_status);
+  if (status != HAL_OK) {
+    sprintf((char*)buf, "print failed, status = %u, I2c_State = %#X, CR1 = %#X, SR1 = %#X, SR2 = %#X, errCode = %#X\n", status, hi2c1.State, hi2c1.Instance->CR1, hi2c1.Instance->SR1, hi2c1.Instance->SR2, hi2c1.ErrorCode);
+    Serial_PutString(buf);
+  } else {
+    sprintf((char*)buf, "up_status: %#X, %u, %u, %u, %#X, %u, %#X\n", up_status.magic, up_status.run, up_status.flash_empty, up_status.length, up_status.crc32,\
+                  up_status.factory_length, up_status.factory_crc32);
+    Serial_PutString(buf);
+  }
 }
 
 HAL_StatusTypeDef Get_Log_Status(LogFileState *log_status)

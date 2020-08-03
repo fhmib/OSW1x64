@@ -14,6 +14,13 @@ typedef enum {
   MSG_TYPE_FLASH_ISR,
 } MsgType;
 
+// For Log File
+typedef struct {
+  uint32_t header;
+  uint32_t offset;
+  uint8_t cur_sector;
+} LogFileState;
+
 typedef enum {
   EE_UP_MAIGC             = 0x00, // 0x0 ~ 0x0
   EE_UP_RUN               = 0x01, // 0x1 ~ 0x1 Which fw is running
@@ -22,6 +29,9 @@ typedef enum {
   EE_UP_CRC32             = 0x07, // 0x7 ~ 0xA
   EE_UP_FACTORY_LENGTH    = 0x0B, // 0xB ~ 0xE
   EE_UP_FACTORY_CRC32     = 0x0F, // 0xF ~ 0x12
+
+  EE_LOG_OFFSET           = 0x13, // 0x13 ~ 0x16
+  EE_LOG_HEADER           = 0x17, // 0x17 ~ 0x1A
 } EepromAddrMap;
 
 void Throw_Log(uint8_t *buf, uint32_t length);
@@ -42,6 +52,9 @@ typedef struct {
 
 osStatus_t Get_Up_Status(UpgradeFlashState *status);
 osStatus_t Update_Up_Status(UpgradeFlashState *status);
+osStatus_t Get_Log_Status(LogFileState *log_status);
+osStatus_t Update_Log_Status(LogFileState *log_status);
 
+uint32_t Get_SW_By_IO(void);
 
 #endif

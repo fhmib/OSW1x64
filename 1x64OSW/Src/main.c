@@ -25,6 +25,7 @@
 #include "dma.h"
 #include "i2c.h"
 #include "iwdg.h"
+#include "rtc.h"
 #include "spi.h"
 #include "usart.h"
 #include "gpio.h"
@@ -110,6 +111,7 @@ int main(void)
   MX_SPI5_Init();
   MX_USART1_UART_Init();
   MX_USART3_UART_Init();
+  MX_RTC_Init();
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */
@@ -143,6 +145,7 @@ void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+  RCC_PeriphCLKInitTypeDef PeriphClkInitStruct = {0};
 
   /** Configure the main internal regulator output voltage 
   */
@@ -182,13 +185,21 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+  PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_RTC;
+  PeriphClkInitStruct.RTCClockSelection = RCC_RTCCLKSOURCE_LSI;
+  if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
+  {
+    Error_Handler();
+  }
 }
 
 /* USER CODE BEGIN 4 */
+extern RespondStu resp_buf;
 void OSW_Init(void)
 {
   osStatus_t status;
   uint32_t i;
+  char *p = (char*)resp_buf.buf;
 
   EPT("Firmware version: %s\n", fw_version);
 
@@ -207,6 +218,16 @@ void OSW_Init(void)
   if (__HAL_RCC_GET_FLAG(RCC_FLAG_SFTRST) != RESET){
     SET_RESETFLAG(SFT_RESET_BIT);
     EPT("Software Reset is set\n");
+    memset(p, 116, 0);
+    p += 4;
+    p += 36;
+    strcpy(p, fw_version);
+    p += 37;
+    strcpy(p, serial_number);
+    p += 20;
+    strcpy(p, filter_number);
+    p += 23;
+    Uart_Respond(CMD_SOFTRESET, RESPOND_SUCCESS, resp_buf.buf, 120);
   }
   if (__HAL_RCC_GET_FLAG(RCC_FLAG_IWDGRST) != RESET){
     SET_RESETFLAG(IWDG_RESET_BIT);
@@ -310,6 +331,19 @@ void HAL_FLASH_EndOfOperationCallback(uint32_t ReturnValue)
       up_state.is_erasing = 0;
       isr_msg.type = MSG_TYPE_FLASH_ISR;
       osMessageQueuePut(mid_ISR, &isr_msg, 0U, 0U);
+    }
+  }
+}
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+  uint32_t sw_num;
+
+  if (GPIO_Pin == GPIO_PIN_13) {
+    if (HAL_GPIO_ReadPin(SW_MODE_SEL_GPIO_Port, SW_MODE_SEL_Pin) == GPIO_PIN_SET) {
+      EPT("Switch strobe signal come but switch mode is set\n");
+    } else {
+      sw_num = Get_SW_By_IO();
+      EPT("Switch number is %u\n", sw_num);
     }
   }
 }

@@ -52,6 +52,11 @@ extern "C" {
 /* Exported constants --------------------------------------------------------*/
 /* USER CODE BEGIN EC */
 extern uint8_t reset_flag;
+extern uint8_t flash_in_use;
+extern LogFileState log_file_state;
+extern const uint32_t file_flash_addr[];
+extern const uint32_t file_flash_end;
+extern const uint8_t file_flash_count;
 /* USER CODE END EC */
 
 /* Exported macro ------------------------------------------------------------*/
@@ -61,8 +66,10 @@ extern uint8_t reset_flag;
 #define CMD_PROCESS_PRIORITY      osPriorityHigh
 #define WATCHDOG_PRIORITY         osPriorityISR
 #define INTERRUPT_TASK_PRIORITY   osPriorityISR
+#define LOG_MESSAGE_PRIORITY      osPriorityLow1
 
 #define WATCH_DOG_DELAY_TIME      500 // ms
+#define CMD_WAIT_TEMP_TIME        50    //ms
 
 // Reset Flags
 #define BOR_RESET_BIT             (1UL << 0)
@@ -75,11 +82,15 @@ extern uint8_t reset_flag;
 #define IS_RESETFLAG_SET(bit)     (reset_flag & bit)
 #define SET_RESETFLAG(bit)        (reset_flag |= bit)
 
+// Log
 #define LOG_QUEUE_LENGTH          6
+#define LOG_FIRST_SECTOR          12
+#define LOG_PACKET_LENGTH         1024
+
 #define ISR_QUEUE_LENGTH          6
 
 
-#define EEPROM_ADDR                   (0x57 << 1)
+#define EEPROM_ADDR               (0x57 << 1)
 #define UPGRADE_MAGIC             0xAA
 
 /* USER CODE END EM */
@@ -88,10 +99,13 @@ extern uint8_t reset_flag;
 void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
+void OSW_Init(void);
 
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define EEPROM_WP_Pin GPIO_PIN_5
+#define EEPROM_WP_GPIO_Port GPIOB
 #define Strobe_N_Pin GPIO_PIN_13
 #define Strobe_N_GPIO_Port GPIOH
 #define Strobe_N_EXTI_IRQn EXTI15_10_IRQn

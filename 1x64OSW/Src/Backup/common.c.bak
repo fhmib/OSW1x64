@@ -226,7 +226,8 @@ HAL_StatusTypeDef I2cEepromWrite(int16_t dev_addr, uint16_t mem_addr, uint8_t *b
   int32_t offset = 0, write_length = 0, byte_addr = 0;
   HAL_StatusTypeDef status = HAL_OK;
 
-  HAL_GPIO_WritePin(ROM_WP_GPIO_Port, ROM_WP_Pin, GPIO_PIN_RESET);
+  //HAL_GPIO_WritePin(ROM_WP_GPIO_Port, ROM_WP_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(EEPROM_WP_GPIO_Port, EEPROM_WP_Pin, GPIO_PIN_RESET);
 
   while (length > 0) {
     byte_addr = mem_addr % EEPROM_PAGESIZE;
@@ -243,7 +244,8 @@ HAL_StatusTypeDef I2cEepromWrite(int16_t dev_addr, uint16_t mem_addr, uint8_t *b
     osDelay(pdMS_TO_TICKS(10));
   }
 
-  HAL_GPIO_WritePin(ROM_WP_GPIO_Port, ROM_WP_Pin, GPIO_PIN_SET);
+  //HAL_GPIO_WritePin(ROM_WP_GPIO_Port, ROM_WP_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(EEPROM_WP_GPIO_Port, EEPROM_WP_Pin, GPIO_PIN_SET);
   
   return status;
 }

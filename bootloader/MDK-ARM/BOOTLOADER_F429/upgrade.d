@@ -38,5 +38,6 @@ bootloader_f429\upgrade.o: ../Inc/common.h
 bootloader_f429\upgrade.o: ../Inc/menu.h
 bootloader_f429\upgrade.o: ../Inc/flash_if.h
 bootloader_f429\upgrade.o: ../Inc/ymodem.h
+bootloader_f429\upgrade.o: ../Inc/i2c.h
 bootloader_f429\upgrade.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stdio.h
 bootloader_f429\upgrade.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\string.h

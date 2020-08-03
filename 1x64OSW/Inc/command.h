@@ -5,6 +5,8 @@
 #include "cmsis_os.h"
 
 extern char *fw_version;
+extern char *serial_number;
+extern char *filter_number;
 
 #define TRANS_START_BYTE            0x55
 #define TRANS_MAX_LENGTH            1200
@@ -50,8 +52,12 @@ typedef enum {
   CMD_QUERY_SWITCH        = 0xD0, // Switch Status Request
 
   // for test
-  CMD_FOR_TEST            = 0xFF,
+  CMD_FOR_DEBUG           = 0x7FFFFFFF,
 } CmdId;
+
+typedef enum {
+  CMD_DEBUG_DAC_SW        = 0x01,
+} CmdDebugId;
 
 typedef enum {
   CMD_SEQ_MSG_ID          = 0x01,
@@ -84,6 +90,26 @@ typedef struct {
   uint32_t cmd_id;
   cmdFunc func;
 }CmdStruct;
+
+
+typedef enum {
+  SWITCH_NUM_1 = 1,
+  SWITCH_NUM_2 = 2,
+  SWITCH_NUM_3 = 3,
+  SWITCH_NUM_4 = 4,
+  SWITCH_NUM_5 = 5,
+  SWITCH_NUM_6 = 6,
+  SWITCH_NUM_7 = 7,
+  SWITCH_NUM_TOTAL,
+} SwitchNumber;
+
+typedef struct {
+  uint32_t sw_num;
+  uint8_t px_chan; // dac channel correspond to positive x
+  uint8_t nx_chan; // dac channel correspond to negatve x
+  uint8_t py_chan; // dac channel correspond to positive y
+  uint8_t ny_chan; // dac channel correspond to negatve y
+} SwitchMapStruct;
 
 
 #define UPGRADE_MAX_DATA_LENGTH     1024
@@ -136,10 +162,14 @@ uint32_t Cmd_Get_Version(void);
 uint32_t Cmd_Softreset(void);
 uint32_t Cmd_Get_Temperature(void);
 uint32_t Cmd_Device_Status(void);
+uint32_t Cmd_Set_Time(void);
+uint32_t Cmd_Get_Time(void);
 uint32_t Cmd_LOG_Number(void);
 uint32_t Cmd_LOG_Content(void);
 
-
+uint32_t Cmd_For_Debug(void);
+HAL_StatusTypeDef SW_Dac_Write(uint8_t chan, uint16_t val);
+uint32_t my_abs(int32_t val);
 
 
 #endif

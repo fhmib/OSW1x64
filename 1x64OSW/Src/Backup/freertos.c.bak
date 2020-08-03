@@ -52,6 +52,7 @@
 /* USER CODE BEGIN Variables */
 osSemaphoreId_t uartProcessSemaphore;
 osSemaphoreId_t cmdProcessSemaphore;
+osSemaphoreId_t logEraseSemaphore;                  // semaphore id
 
 osMessageQueueId_t mid_LogMsg;
 osMessageQueueId_t mid_ISR;                // message queue id
@@ -82,14 +83,21 @@ osThreadId_t watchdogTaskHandle;
 const osThreadAttr_t watchdogTask_attributes = {
   .name = "watchdogTask",
   .priority = (osPriority_t) WATCHDOG_PRIORITY,
-  .stack_size = 256
+  .stack_size = 512
 };
 
 osThreadId_t isrTaskHandle;
 const osThreadAttr_t isrTask_attributes = {
   .name = "isrTask",
   .priority = (osPriority_t) INTERRUPT_TASK_PRIORITY,
-  .stack_size = 256
+  .stack_size = 512
+};
+
+osThreadId_t logTaskHandle;
+const osThreadAttr_t logTask_attributes = {
+  .name = "logTask",
+  .priority = (osPriority_t) LOG_MESSAGE_PRIORITY,
+  .stack_size = 512
 };
 
 /* USER CODE END Variables */
@@ -107,6 +115,7 @@ void uartProcessTask(void *argument);
 void cmdProcessTask(void *argument);
 void watchdogTask(void *argument);
 void isrTask(void *argument);
+void logTask(void *argument);
 
 /* USER CODE END FunctionPrototypes */
 
@@ -136,6 +145,10 @@ void MX_FREERTOS_Init(void) {
 
   cmdProcessSemaphore = osSemaphoreNew(1U, 0U, NULL);
   if (cmdProcessSemaphore == NULL) {
+  }
+
+  logEraseSemaphore = osSemaphoreNew(1U, 0U, NULL);
+  if (logEraseSemaphore == NULL) {
   }
 
   mid_LogMsg = osMessageQueueNew(LOG_QUEUE_LENGTH, sizeof(MsgStruct), NULL);
@@ -170,6 +183,7 @@ void MX_FREERTOS_Init(void) {
   cmdProcessTaskHandle = osThreadNew(cmdProcessTask, NULL, &cmdProcessTask_attributes);
   watchdogTaskHandle = osThreadNew(watchdogTask, NULL, &watchdogTask_attributes);
   isrTaskHandle = osThreadNew(isrTask, NULL, &isrTask_attributes);
+  logTaskHandle = osThreadNew(logTask, NULL, &logTask_attributes);
 
   /* USER CODE END RTOS_THREADS */
 
@@ -265,6 +279,7 @@ void uartProcessTask(void *argument)
       } else {
         trans_buf.stage = TRANS_RECV_DATA;
         HAL_UART_Receive_DMA(&huart1, &trans_buf.buf[CMD_SEQ_MSG_DATA], msg_length - 8);
+        //EPT("Message Length: %u\n", msg_length);
         trans_buf.length = msg_length + 1;
       }
     } else if (trans_buf.stage == TRANS_RECV_DATA){
@@ -350,17 +365,101 @@ void isrTask(void *argument)
   osStatus_t status;
   MsgStruct msg;
 
+  OSW_Init();
+
   for (;;)
   {
     status = osMessageQueueGet(mid_ISR, &msg, 0U, osWaitForever);
     if (status != osOK)
       continue;
-    
+
     if (msg.type == MSG_TYPE_FLASH_ISR) {
+      EPT("Received MSG_TYPE_FLASH_ISR, flash_empty = %u\n", upgrade_status.flash_empty);
       status = Update_Up_Status(&upgrade_status);
       if (status != osOK) {
         EPT("Update upgrade status to eeprom failed\n");
       }
+    }
+  }
+}
+
+extern UpgradeStruct up_state;
+void logTask(void *argument)
+{
+  MsgStruct log_msg;
+  osStatus_t status;
+  uint32_t write_length;
+
+  uint32_t overflow_addr;
+  uint32_t next_sector_addr;
+  uint8_t next_sector;
+  uint8_t remainder;
+
+  if (log_file_state.cur_sector == LOG_FIRST_SECTOR + file_flash_count - 1) {
+    overflow_addr = file_flash_end + 1;
+    next_sector_addr = file_flash_addr[0];
+    next_sector = LOG_FIRST_SECTOR;
+  } else {
+    next_sector_addr = overflow_addr = file_flash_addr[log_file_state.cur_sector - LOG_FIRST_SECTOR + 1];
+    next_sector = log_file_state.cur_sector + 1;
+  }
+
+  for (;;)
+  {
+    status = osMessageQueueGet(mid_LogMsg, &log_msg, 0U, osWaitForever);
+    if (status != osOK)
+      continue;
+    
+    if (log_file_state.offset >= file_flash_end + 1 || log_file_state.offset < file_flash_addr[0])
+      continue;
+
+    // The final amount of data written to flash must be an integer multiple of 4
+    remainder = log_msg.length % 4;
+    if (remainder) remainder = 4 - remainder;
+    if (log_file_state.offset + log_msg.length + remainder >= overflow_addr) {
+      // 1. fill the rest space with ' '
+      Log_Write_byte(log_file_state.offset, ' ', overflow_addr - log_file_state.offset);
+      
+      // 2. erase flash
+      while (flash_in_use) {
+        osDelay(pdMS_TO_TICKS(200));
+      }
+      flash_in_use = 1;
+      osSemaphoreAcquire(logEraseSemaphore, 0);
+      FLASH_If_Erase_IT(next_sector);
+
+      // 3. waiting for completion
+      osSemaphoreAcquire(logEraseSemaphore, osWaitForever);
+
+      // 4. update log_file_state, overflow_addr and next_***s
+      log_file_state.offset = next_sector_addr;
+      log_file_state.cur_sector = next_sector;
+      if (log_file_state.cur_sector == LOG_FIRST_SECTOR + file_flash_count - 1) {
+        overflow_addr = file_flash_end + 1;
+        next_sector_addr = file_flash_addr[0];
+        next_sector = LOG_FIRST_SECTOR;
+      } else {
+        next_sector_addr = overflow_addr = file_flash_addr[log_file_state.cur_sector - LOG_FIRST_SECTOR + 1];
+        next_sector = log_file_state.cur_sector + 1;
+      }
+      if (log_file_state.offset == log_file_state.header) {
+        log_file_state.header = next_sector_addr;
+      }
+    }
+
+    EPT("Writing log to flash address %#X, header = %#X\n", log_file_state.offset, log_file_state.header);
+    while (flash_in_use) {
+      EPT("Flash in using...\n");
+      osDelay(pdMS_TO_TICKS(200));
+    }
+    write_length = Log_Write(log_file_state.offset, log_msg.pbuf, log_msg.length);
+    log_file_state.offset += write_length;
+    
+    vPortFree(log_msg.pbuf);
+    
+    if (osMessageQueueGetCount(mid_LogMsg) == 0) {
+      // update log_file_state to eeprom/flash
+      Update_Log_Status(&log_file_state);
     }
   }
 }
